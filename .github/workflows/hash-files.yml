@@ -92,39 +92,3 @@ jobs:
           git add hashes1400.json
           git commit -m "Automatic hash files update"
           git push
-
-      - name: Upload files to Database
-        if: steps.check-changes.outputs.changed == 'true'
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        shell: bash
-        run: |
-          cd ./wasp-assets
-          while IFS= read -r file; do
-            [ -z "$file" ] && continue
-            if [ ! -f "$file" ]; then continue; fi
-            remote_path="${file#./}"
-            mime_type=$(file --mime-type -b "$file")
-            curl -s -X PUT "$SUPABASE_URL/storage/v1/object/assets/$remote_path" \
-              -H "Authorization: Bearer $SUPABASE_KEY" \
-              -H "Content-Type: $mime_type" \
-              --data-binary @"$file"
-          done < ./tools/whitelist.txt
-
-  notification:
-    if: ${{ github.repository_owner == 'WaspScripts' && github.ref == 'refs/heads/main' && needs.hash-files.outputs.changes_detected == 'true' }}
-    runs-on: ubuntu-latest
-    needs: hash-files
-    steps:
-      - name: Discord notification
-        shell: bash
-        run: |
-          BODY=$(jq -nc \
-            --arg title "Assets Update" \
-            --arg desc "${{ github.event.head_commit.message }}" \
-            --arg url  "https://github.com/WaspScripts/wasp-webapp/commit/${{ github.event.head_commit.id }}" \
-            --arg foot "Author: ${{ github.event.head_commit.author.name }}" \
-            --argjson color 16742912 \
-            '{embeds:[{title:$title,description:$desc,url:$url,color:$color,footer:{text:$foot}}]}')
-          curl -H "Content-Type: application/json" -d "$BODY" ${{ secrets.UPDATES_WEBHOOK }}
